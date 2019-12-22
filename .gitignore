@@ -6,6 +6,16 @@ __pycache__/
 # C extensions
 *.so
 
+# OWN
+.idea/
+CarlaUE4/
+Engine/
+HDMaps/
+CarlaUE4.exe
+ignoreThisFolder/
+PythonAPI/examples/_out/
+
+
 # Distribution / packaging
 .Python
 build/
