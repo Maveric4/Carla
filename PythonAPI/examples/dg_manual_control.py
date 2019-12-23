@@ -94,6 +94,9 @@ try:
     from pygame.locals import K_F1
     from pygame.locals import K_F10
     from pygame.locals import K_F9
+    from pygame.locals import K_F8
+    from pygame.locals import K_F7
+    from pygame.locals import K_F6
     from pygame.locals import K_LEFT
     from pygame.locals import K_PERIOD
     from pygame.locals import K_RIGHT
@@ -129,10 +132,11 @@ import dg_autonomous as sdc
 # ==============================================================================
 # -- My functions ----------------------------------------------------------
 # ==============================================================================
-def detect_lanes(img):
-    control_decision = sdc.detect_lanes(img)
-    print("Detecting lanes")
-    print("Control decision: " + str(control_decision))
+def detect_lanes(img, frame_number):
+    # control_decision = sdc.detect_lanes(img)
+    control_decision = sdc.pipeline(img, frame_number)
+    # print("Detecting lanes")
+    # print("Control decision: " + str(control_decision))
     return control_decision
 
 
@@ -309,8 +313,9 @@ class KeyboardControl(object):
                 return True
             elif event.type == pygame.KEYUP:
                 if self._is_quit_shortcut(event.key):
-                    print("Additional {} vehicles destroyed".format(len(world._actor_list)))
-                    client.apply_batch([carla.command.DestroyActor(x) for x in world._actor_list])
+                    if len(world._actor_list) > 0:
+                        print("Additional {} vehicles destroyed".format(len(world._actor_list)))
+                        client.apply_batch([carla.command.DestroyActor(x) for x in world._actor_list])
                     return True
                 elif event.key == K_BACKSPACE:
                     world.restart()
@@ -322,6 +327,10 @@ class KeyboardControl(object):
                 elif event.key == K_F9:
                     world.camera_manager.do_shot = True
                 ## End of #2
+                ## #3 Making shot if F8 pressed
+                elif event.key == K_F8:
+                    world.camera_manager.detect_lane = not world.camera_manager.detect_lane
+                ## End of #3
                 elif event.key == K_F1:
                     world.hud.toggle_info()
                 elif event.key == K_h or (event.key == K_SLASH and pygame.key.get_mods() & KMOD_SHIFT):
@@ -391,11 +400,20 @@ class KeyboardControl(object):
                         world.hud.notification('Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
         if not self._autopilot_enabled:
             if isinstance(self._control, carla.VehicleControl):
-                self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
+                if world.camera_manager.detect_lane:
+                    self._control_by_detecting_lanes(world.camera_manager.control_decision)
+                else:
+                    self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
                 self._control.reverse = self._control.gear < 0
             elif isinstance(self._control, carla.WalkerControl):
                 self._parse_walker_keys(pygame.key.get_pressed(), clock.get_time())
             world.player.apply_control(self._control)
+
+    def _control_by_detecting_lanes(self, control_decision):
+        self._control.throttle = control_decision[1]
+        self._control.brake = control_decision[2]
+        self._steer_cache = control_decision[0]
+        self._control.steer = control_decision[0]
 
     def _parse_vehicle_keys(self, keys, milliseconds):
         self._control.throttle = 1.0 if keys[K_UP] or keys[K_w] else 0.0
@@ -746,6 +764,7 @@ class CameraManager(object):
             ['sensor.lidar.ray_cast', None, 'Lidar (Ray-Cast)']]
         ## #3 Declaring new properties
         self.do_shot = False
+        self.detect_lane = False
         self.control_decision = [0, 0.5, 0]
         ## End of #3
         world = self._parent.get_world()
@@ -828,7 +847,8 @@ class CameraManager(object):
                     cv2.imwrite('_out/img_{}.jpg'.format(image.frame_number), array)
                     print('_out/img_{}.jpg'.format(image.frame_number) + " saved")
                     self.do_shot = False
-                self.control_decision = detect_lanes(array)
+                if self.detect_lane:
+                    self.control_decision = detect_lanes(array, image.frame_number)
             array = array[:, :, ::-1]
             self.surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
 
@@ -912,10 +932,10 @@ def main():
     argparser.add_argument(
         '--res',
         metavar='WIDTHxHEIGHT',
-        default='640x480',
-        # default='1280x720',
-        # help='window resolution (default: 1280x720)')
-        help='window resolution (default: 640x480)')
+        # default='640x480',
+        default='1280x720',
+        help='window resolution (default: 1280x720)')
+        # help='window resolution (default: 640x480)')
     argparser.add_argument(
         '--filter',
         metavar='PATTERN',

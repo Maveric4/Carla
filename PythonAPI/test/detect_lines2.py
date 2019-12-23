@@ -1,115 +1,10 @@
-
-## imports
-import cv2
-import time
+#importing some useful packages
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import numpy as np
-
-
-def region_of_interest2(img, vertices):  # not
-    mask = np.zeros_like(img)
-    ignore_mask_color = 255
-    cv2.fillPoly(mask, vertices, ignore_mask_color)
-    masked_image = cv2.bitwise_and(img, mask)
-    return masked_image
-
-
-def detect_lanes(image):
-    imshape = image.shape
-    control_decision = [0, 0.7, 0]
-    lower_left = [0, imshape[0] - imshape[0]//9] # do dopracowania
-    lower_right = [imshape[1], imshape[0] - imshape[0]//9]
-    top_left = [imshape[1] // 2 - imshape[1] // 5, imshape[0] // 5 * 3]  # - imshape[0] // 5]
-    top_right = [imshape[1] // 2 + imshape[1] // 5, imshape[0] // 5 * 3]  # - imshape[0] // 5]
-
-    im_gray = cv2.cvtColor(image, cv2.COLOR_BGR2HSV_FULL)[:, :, 2]
-    # im_bin = cv2.threshold(im_gray, 100, 255, cv2.THRESH_BINARY_INV)
-
-    height, width = im_gray.shape
-
-    im_res = np.zeros((height, width, 1), np.uint8)
-
-    im_gray_ = cv2.blur(im_gray, (5, 5))
-
-    im_line = cv2.Canny(im_gray_, 60, 120)
-    vertices = [np.array([lower_left, top_left, top_right, lower_right], dtype=np.int32)]
-    im_line = region_of_interest2(im_line, vertices)
-
-    # im_line = cv2.Sobel()
-
-    # im_hough = cv2.imread('data/foto3.jpg')
-    # im_hough = cv2.resize(im_hough, (0,0), fx=0.5, fy=0.5)
-
-    # lines = cv2.HoughLines(im_line,1,np.pi/180,200)
-
-    lines = cv2.HoughLines(im_line, 1, np.pi / 90, 50)
-    # minLineLength = 100
-    # maxLineGap = 10
-    # lines = cv2.HoughLinesP(im_line, 1, np.pi/180, 100, minLineLength, maxLineGap)
-
-    cnt = 0
-
-    rhos = []
-    thetas = []
-    was_here = False
-    left_lines = []
-    right_lines = []
-    if lines is not None:
-        for line in lines:
-            for rho, theta in line:
-                if theta > 1.3 and theta < 2:
-                    continue
-                for r, t in zip(rhos, thetas):
-                    if abs(r - rho) < 40:
-                        if abs(t - theta) < 0.3:
-                            was_here = True
-
-                if was_here is True:
-                    was_here = False
-                    continue
-
-                a = np.cos(theta)
-                b = np.sin(theta)
-                x0 = a * rho
-                y0 = b * rho
-                a_coeff = -b/a
-                x1 = int(x0 + 2000 * (-b))
-                y1 = int(y0 + 2000 * (a))
-                x2 = int(x0 - 2000 * (-b))
-                y2 = int(y0 - 2000 * (a))
-                if theta <= 1.3:
-                    cv2.line(image, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                    left_lines.append([a_coeff, rho/a])
-                if theta >= 2:
-                    cv2.line(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    right_lines.append([a_coeff, rho/a])
-                rhos.append(rho)
-                thetas.append(theta)
-
-    l1 = [item[0] for item in left_lines]
-    l2 = [item[1] for item in left_lines]
-    r1 = [item[0] for item in right_lines]
-    r2 = [item[1] for item in right_lines]
-    cv2.circle(image, tuple(top_left), 3, (255, 255, 0))
-    cv2.circle(image, tuple(top_right), 3, (255, 255, 0))
-    cv2.circle(image, tuple(lower_left), 3, (255, 255, 0))
-    cv2.circle(image, tuple(lower_right), 3, (255, 255, 0))
-    common_point = 0
-    try:
-        [a1, b1] = [sum(l1)/len(l1), sum(l2)/len(l2)]
-        [a2, b2] = [sum(r1)/len(r1), sum(r2)/len(r2)]
-        common_point = (int(a1*((b2-b1)/(a1-a2))+b1), int((b2-b1)/(a1-a2)))
-        # print(common_point[0] - image.shape[1]//2)
-        cv2.circle(image, common_point, 10, (255, 255, 255))
-        control_decision = [(common_point[0] - image.shape[1]//2) * 10/ image.shape[1], 1, 0]
-        # self._outq_control.put([(common_point[0] - image.shape[1]//2) * 50, 50000, 64000])
-    except ZeroDivisionError:
-        pass
-
-    # cv2.imshow('Original', image)
-    # cv2.imshow('Lines', im_line)
-    # cv2.waitKey(1)
-
-    return control_decision
+import cv2
+import glob
+import math
 
 
 def grayscale(img):
@@ -207,6 +102,12 @@ def weighted_img(img, initial_img, a=0.8, b=1., c=0.):
     return cv2.addWeighted(initial_img, a, img, b, c)
 
 
+def plt_img(image, fig, axis, cmap=None):
+    """ Helper for plotting images/frames """
+    a = fig.add_subplot(1, 3, axis)
+    imgplot = plt.imshow(image, cmap=cmap)
+
+
 def extend_point(x1, y1, x2, y2, length):
     """ Takes line endpoints and extroplates new endpoint by a specfic length"""
     line_len = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
@@ -288,14 +189,12 @@ def find_intersection(lines):
     return(point_of_intersection)
 
 
-def pipeline(image, frame_number, preview=False, wind_name="test"):
+def pipeline(image, preview=False, wind_name="empty"):
     ### Params for region of interest
     # bot_left = [80, 540]
     # bot_right = [980, 540]
     # apex_right = [510, 315]
     # apex_left = [450, 315]
-
-    control_decision = [0, 0.7, 0]
     width = image.shape[1]
     height = image.shape[0]
     bot_left = [0 + int(width*0.05), height]
@@ -324,18 +223,53 @@ def pipeline(image, frame_number, preview=False, wind_name="test"):
 
     lines = np.concatenate((right, left))
 
-    inter_point = find_intersection(lines)
-    control_decision = [(inter_point[0] - width/2) * 3, 0.4, 0]
-
     ### Draw lines and return final image
     line_img = np.copy((image) * 0)
     draw_lines(line_img, lines, thickness=10)
 
     line_img = region_of_interest(line_img, v)
     final = weighted_img(line_img, image)
-    if frame_number % 4 == 0:
-        cv2.destroyAllWindows()
-        cv2.imshow(wind_name, final)
-        cv2.waitKey(1)
 
-    return control_decision
+    # Circles on vertices corners
+    cv2.circle(final, tuple(apex_left), 3, (255, 255, 0))
+    cv2.circle(final, tuple(apex_right), 3, (255, 255, 0))
+    cv2.circle(final, tuple(bot_left), 3, (255, 255, 0))
+    cv2.circle(final, tuple(bot_right), 3, (255, 255, 0))
+    # # Circle of intersection
+    inter_point = find_intersection(lines)
+    control_decision = [(inter_point[0] - width/2) / width, 1, 0]
+    print(control_decision)
+    cv2.circle(final, inter_point, 5, (255, 255, 255))
+
+    ### Optional previwing of pipeline
+    if (preview):
+        cv2.destroyAllWindows()
+        cv2.imshow(wind_name + str(" mask"), mask)
+        cv2.imshow(wind_name + str(" edge"), edge)
+        cv2.imshow(wind_name, final)
+        # cv2.imshow(wind_name + str(" blur"), blur)
+        cv2.waitKey(0)
+
+    return final
+
+
+# for it, img_path in enumerate(glob.glob("./imgs_lane_detection2/*.jpg")):
+#     image = mpimg.imread(img_path)
+#     print('This image is:', type(image), 'with dimesions:', image.shape)
+#     ls = pipeline(image, preview=True)
+
+for it, img_path in enumerate(glob.glob("./imgs_lane_detection/*.jpg")):
+    image = mpimg.imread(img_path)
+    image = cv2.resize(image, (960, 540))
+    # cv2.imshow("test", image)
+    # cv2.waitKey(0)
+    # printing out some stats and plotting
+    # print('This image is:', type(image), 'with dimesions:', image.shape)
+    try:
+        ls = pipeline(image, preview=True, wind_name=img_path)
+    except Exception:
+        pass
+    # if it > len(glob.glob("./imgs_lane_detection/*.jpg"))-2:
+    #     cv2.waitKey(0)
+
+
