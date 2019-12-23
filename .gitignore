@@ -14,7 +14,8 @@ HDMaps/
 CarlaUE4.exe
 ignoreThisFolder/
 PythonAPI/examples/_out/
-
+PythonAPI/test/Lane_detection/Codes-for-Lane-Detection
+PythonAPI/test/Lane_detection/lanenet-lane-detection
 
 # Distribution / packaging
 .Python

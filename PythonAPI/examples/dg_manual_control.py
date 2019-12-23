@@ -128,6 +128,8 @@ except ImportError:
 import cv2
 import dg_autonomous as sdc
 
+IMG_HEIGHT = 720
+IMG_WIDTH = 1280
 
 # ==============================================================================
 # -- My functions ----------------------------------------------------------
@@ -138,6 +140,15 @@ def detect_lanes(img, frame_number):
     # print("Detecting lanes")
     # print("Control decision: " + str(control_decision))
     return control_decision
+
+
+def save_img(image):
+    print("hue")
+    i = np.array(image.raw_data)
+    i2 = i.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
+    i3 = i2[:, :, :3]
+    cv2.imwrite('_out/img_{}.jpg'.format(image.frame_number), i3)
+    return i3/255.0
 
 
 # ==============================================================================
@@ -287,6 +298,10 @@ class World(object):
 
         print('Spawned %d additional vehicles.' % len(self._actor_list))
 
+    def attach_camera(self):
+        self.camera_manager.attach_camera(self.world)
+
+
 # ==============================================================================
 # -- KeyboardControl -----------------------------------------------------------
 # ==============================================================================
@@ -327,14 +342,18 @@ class KeyboardControl(object):
                 elif event.key == K_F9:
                     world.camera_manager.do_shot = True
                 ## End of #2
-                ## #4 Making shot if F8 pressed
+                ## #4 Detecting lanes and auto control if F8 pressed
                 elif event.key == K_F8:
                     world.camera_manager.detect_lane = not world.camera_manager.detect_lane
                 ## End of #4
-                ## #5 Making shot if F7 pressed
+                ## #5 Recording example video if F7 pressed
                 elif event.key == K_F7:
                     world.camera_manager.record_sequence = not world.camera_manager.record_sequence
                 ## End of #5
+                ## #6 Recording example video if F6 pressed
+                elif event.key == K_F6:
+                    world.attach_camera()
+                ## End of #6
                 elif event.key == K_F1:
                     world.hud.toggle_info()
                 elif event.key == K_h or (event.key == K_SLASH and pygame.key.get_mods() & KMOD_SHIFT):
@@ -765,7 +784,8 @@ class CameraManager(object):
             ['sensor.camera.semantic_segmentation', cc.Raw, 'Camera Semantic Segmentation (Raw)'],
             ['sensor.camera.semantic_segmentation', cc.CityScapesPalette,
                 'Camera Semantic Segmentation (CityScapes Palette)'],
-            ['sensor.lidar.ray_cast', None, 'Lidar (Ray-Cast)']]
+            ['sensor.lidar.ray_cast', None, 'Lidar (Ray-Cast)'],
+            ['sensor.camera.rgb', cc.Raw, 'Own dg camera RGB']]
         ## #3 Declaring new properties
         self.do_shot = False
         self.detect_lane = False
@@ -793,6 +813,7 @@ class CameraManager(object):
         needs_respawn = True if self.index is None \
             else self.sensors[index][0] != self.sensors[self.index][0]
         if needs_respawn:
+            print("respawned")
             if self.sensor is not None:
                 self.sensor.destroy()
                 self.surface = None
@@ -854,12 +875,30 @@ class CameraManager(object):
                     self.do_shot = False
                 if self.detect_lane:
                     self.control_decision = detect_lanes(array, image.frame_number)
+            # if self.sensors[self.index][2].startswith('Own'):
+            #     self.sensor.set_transform(self._camera_transforms[1])
+            #     cv2.imwrite('_out/img_{}.jpg'.format(image.frame_number), array)
+            #     self.sensor.set_transform(self._camera_transforms[0])
+            #     print("dziala")
             array = array[:, :, ::-1]
             self.surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
 
         if self.recording:
             image.save_to_disk('_out/%08d' % image.frame_number)
 
+    def attach_camera(self, world):
+        blueprint_library = world.get_blueprint_library()
+        # Adjust sensor relative to vehicle
+        blueprint = blueprint_library.find('sensor.camera.rgb')
+        # change the dimensions of the image
+        blueprint.set_attribute('image_size_x', f'{IMG_WIDTH}')
+        blueprint.set_attribute('image_size_y', f'{IMG_HEIGHT}')
+        blueprint.set_attribute('fov', '110')
+        spawn_point = carla.Transform(carla.Location(x=1.6, z=1.7))
+
+        # spawn the sensor and attach to vehicle.
+        sensor = world.spawn_actor(blueprint, spawn_point, attach_to=self._parent)
+        sensor.listen(lambda data: save_img(data))
 
 # ==============================================================================
 # -- game_loop() ---------------------------------------------------------------
