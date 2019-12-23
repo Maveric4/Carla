@@ -283,8 +283,6 @@ def find_intersection(lines):
 
     int_pt = line1.intersection(line2)
     point_of_intersection = int(int_pt.x), int(int_pt.y)
-
-    print(point_of_intersection)
     return(point_of_intersection)
 
 

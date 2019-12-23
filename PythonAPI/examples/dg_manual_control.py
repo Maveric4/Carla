@@ -327,10 +327,14 @@ class KeyboardControl(object):
                 elif event.key == K_F9:
                     world.camera_manager.do_shot = True
                 ## End of #2
-                ## #3 Making shot if F8 pressed
+                ## #4 Making shot if F8 pressed
                 elif event.key == K_F8:
                     world.camera_manager.detect_lane = not world.camera_manager.detect_lane
-                ## End of #3
+                ## End of #4
+                ## #5 Making shot if F7 pressed
+                elif event.key == K_F7:
+                    world.camera_manager.record_sequence = not world.camera_manager.record_sequence
+                ## End of #5
                 elif event.key == K_F1:
                     world.hud.toggle_info()
                 elif event.key == K_h or (event.key == K_SLASH and pygame.key.get_mods() & KMOD_SHIFT):
@@ -766,6 +770,7 @@ class CameraManager(object):
         self.do_shot = False
         self.detect_lane = False
         self.control_decision = [0, 0.5, 0]
+        self.record_sequence = False
         ## End of #3
         world = self._parent.get_world()
         bp_library = world.get_blueprint_library()
@@ -843,7 +848,7 @@ class CameraManager(object):
                     print('_out/sem_img_{}.jpg'.format(image.frame_number) + " saved")
                     self.do_shot = False
             if self.sensors[self.index][0].startswith('sensor.camera.rgb'):
-                if self.do_shot:
+                if self.do_shot or self.record_sequence:
                     cv2.imwrite('_out/img_{}.jpg'.format(image.frame_number), array)
                     print('_out/img_{}.jpg'.format(image.frame_number) + " saved")
                     self.do_shot = False
